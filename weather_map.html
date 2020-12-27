@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css"
+          integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+
+    <!--    Map Box-->
+    <script src='https://api.mapbox.com/mapbox-gl-js/v1.12.0/mapbox-gl.js'></script>
+    <link href='https://api.mapbox.com/mapbox-gl-js/v1.12.0/mapbox-gl.css' rel='stylesheet' />
+
+
+    <!-- CSS -->
+    <style>
+        .navbar {
+            justify-content: space-between;
+            background-color: BLACK;
+        }
+
+        .navbar-brand,.navbar-text {
+            color: white;
+        }
+
+        .card {
+            text-wrap: none;
+            margin: 1em;
+        }
+
+        .card-row {
+            padding-top:1em;
+            justify-content: space-evenly;
+        }
+
+        .weather-card-container {
+            background-color: #75CFF0;
+        }
+
+        .card-text,.card-title {
+            text-align: center;
+        }
+
+        .card-header {
+            font-size: 22px;
+            text-align: center;
+        }
+
+        .map-container{
+            margin: 0;
+            padding-top: 1em;
+            width: 100%;
+        }
+
+        .restrict{
+            padding-left: 1em;
+            padding-right: 1em;
+        }
+
+    </style>
+
+    <title>Weather App</title>
+</head>
+<body>
+
+
+<nav class="navbar navbar-expand-lg">
+    <a class="navbar-brand" href="#">Weather App</a>
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarText" aria-controls="navbarText" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+    </button>
+    <span class="navbar-text">
+          Current Location: <span class="show-current-loc"></span>
+        </span>
+</nav>
+
+
+<div class="restrict">
+<div class="container-fluid weather-card-container col-12">
+    <div class="row card-row" id="weather-cards">
+
+    </div>
+</div>
+
+<div class="container-fluid map-container col-12">
+    <div class="row">
+    <div id="map-container" style="width: 100%; height: 400px"></div>
+    </div>
+</div>
+
+</div>
+
+<script src="https://code.jquery.com/jquery-3.4.1.min.js"
+        integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"
+        integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo"
+        crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"
+        integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6"
+        crossorigin="anonymous"></script>
+<script src="js/keys.js"></script>
+<script src="js/mapbox-geocoder-utils.js"></script>
+<script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v4.5.1/mapbox-gl-geocoder.min.js"></script>
+<link
+        rel="stylesheet"
+        href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v4.5.1/mapbox-gl-geocoder.css"
+        type="text/css"
+/>
+
+
+<script>
+    $(document).ready(function(){
+
+            "use strict";
+            mapboxgl.accessToken = mapboxToken;
+            // Setting base map specs
+            var mapOptions = {
+                container: 'map-container',
+                style: 'mapbox://styles/mapbox/streets-v11', // stylesheet location
+                center: [-98.4916, 29.4252], // starting position [lng, lat]
+                zoom: 3, // starting zoom
+                dragPan: true,
+                doubleClickZoom: true,
+                touchZoomRotate: true
+            }
+            //Setting marker choices
+            var markerChoices = {
+                color: "black",
+                draggable: true
+            }
+            //New map linked to variable, feeding in base map specs, allows lat and lng to change
+            var map = new mapboxgl.Map(mapOptions);
+            //Marker linked to variable, feeding in base marker specs, allows targeting of lat and lng
+            var currentMarker = new mapboxgl.Marker(markerChoices)
+                .setLngLat([-98.4861, 29.4260])
+                .addTo(map);
+
+            //Geocoder allows for transforming lat and lng to an actual place
+            var geocoder = new MapboxGeocoder({
+                accessToken: mapboxToken,
+                marker: {
+                    color: 'black',
+                    draggable: 'true'
+                },
+                mapboxgl: mapboxgl
+            });
+
+            //API syntax for adding geocoder to the map
+            map.addControl(geocoder);
+
+            //Updates when marker is finished moving
+            currentMarker.on('dragend', updateWeatherViaMarker);
+            //Updates when results are presented
+            geocoder.on("result", updateWeatherViaGeocoder);
+
+
+            //Initial run for map
+            $.get("https://api.openweathermap.org/data/2.5/onecall", {
+                APPID: OPEN_WEATHER_APPID,
+                lat: 29.423017,
+                lon: -98.48527,
+                units: "imperial",
+                exclude: "minutely,hourly,alerts"
+            }).done(function (data) {
+                //Feeding data to populate bootstrap cards
+                buildHTML(data);
+                $(".show-current-loc").text("San Antonio, Texas");
+            });
+
+
+
+
+            function updateWeatherViaMarker(){
+                var currentLngLat = currentMarker.getLngLat();
+                $.get("https://api.openweathermap.org/data/2.5/onecall", {
+                    APPID: OPEN_WEATHER_APPID,
+                    lat: currentLngLat.lat,
+                    lon: currentLngLat.lng,
+                    units: "imperial",
+                    exclude: "minutely,hourly,alerts"
+                }).done(function (data) {
+                    buildHTML(data);
+                    reverseGeocode(currentLngLat, mapboxToken).then(function(e){
+                        $(".show-current-loc").text(e);
+                        console.log(e);
+                    });
+                });
+            }
+
+
+            function updateWeatherViaGeocoder(result){
+                console.log(result);
+                console.log(result.result);
+                console.log(result.result.center);
+                $.get("https://api.openweathermap.org/data/2.5/onecall", {
+                    APPID: OPEN_WEATHER_APPID,
+                    lat: result.result.center[1],
+                    lon: result.result.center[0],
+                    units: "imperial",
+                    exclude: "minutely,hourly,alerts"
+                }).done(function (data) {
+                    buildHTML(data);
+                    reverseGeocode(result.result.center, mapboxToken).then(function(result){
+                        $(".show-current-loc").text(result.place_name);
+                        console.log(result.place_name);
+                    });
+                });
+            }
+
+
+            function buildHTML(weatherObj) {
+                var cardHtml = "";
+                var forecastArray = weatherObj.daily;
+                for (var i = 0; i <= forecastArray.length -4; i++) {
+                    cardHtml += "<div class='card col-12 col-sm-3'><h5 class='card-header'>" + convertDate(forecastArray[i].dt) + "</h5>";
+                    cardHtml += "<div class='card-body'>";
+                    cardHtml += "<h5 class='card-title'>" + "Temperature: " + forecastArray[i].temp.day + "° F</h5>";
+                    cardHtml += "<p class='card-text'>" + forecastArray[i].weather[0].description + "</p>";
+                    cardHtml += "<p class='card-text'><img src='http://openweathermap.org/img/w/" + forecastArray[i].weather[0].icon+ ".png'>" + "</p>";
+                    cardHtml += "<p class='card-text'>" + "Humidity: " + forecastArray[i].humidity + "%</p>";
+                    cardHtml += "<p class='card-text'>" + "Wind Speed: " + forecastArray[i].wind_speed + "mph</p>";
+                    cardHtml += "<p class='card-text'>" + "Wind Deg: " + forecastArray[i].wind_deg + "°</p>";
+                    cardHtml += "<p class='card-text'>" + "Feels like: " + forecastArray[i].feels_like.day + "° F</p>"
+                    cardHtml += "</div></div>";
+                }
+
+                $("#weather-cards").html(cardHtml);
+            }
+
+
+            function convertDate(unixDate){
+                var daysArray = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+                var monthsArray = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+                var date = new Date(unixDate*1000);
+                var dayOfWeekNum = Math.floor((unixDate/ 86400) + 4) % 7;
+                var year = date.getFullYear();
+                var month = monthsArray[date.getMonth()];
+                var day = date.getDate();
+                var convertedDate = daysArray[dayOfWeekNum] + ", " + month + " " + day + ",  " + year;
+                return convertedDate;
+            }
+        }
+    )
+
+
+</script>
+</body>
+</html>
